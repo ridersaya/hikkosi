@@ -69,9 +69,16 @@ body{margin:0;font-family:-apple-system,'Helvetica Neue',Arial,'Hiragino Kaku Go
 .sort-btn{font-size:11px;background:white;border:1.5px solid #E2E8F0;border-radius:20px;padding:3px 10px;cursor:pointer;color:#64748B;font-weight:500;}
 .sort-btn.active{font-weight:700;border-color:#6366F1;color:#6366F1;}
 
+/* ドラッグ＆ドロップ */
+.drag-handle{display:flex;align-items:center;padding:0 8px 0 0;cursor:grab;color:#CBD5E1;font-size:18px;flex-shrink:0;touch-action:none;user-select:none;-webkit-user-select:none;line-height:1;}
+.drag-handle:hover{color:#94A3B8;}
+.card{background:white;border-radius:13px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:box-shadow .2s,opacity .2s,transform .15s;}
+.card.drag-over{box-shadow:0 0 0 2.5px #6366F1,0 4px 16px rgba(99,102,241,.2);}
+.card.dragging{opacity:.3;transform:scale(.98);}
+#drag-ghost{position:fixed;pointer-events:none;z-index:9999;opacity:.9;box-shadow:0 8px 32px rgba(0,0,0,.22);border-radius:13px;background:white;padding:11px 16px;font-size:12px;font-weight:700;color:#334155;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
 /* リスト */
 .item-list{flex:1;padding:0 14px 110px;display:flex;flex-direction:column;gap:10px;}
-.card{background:white;border-radius:13px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
 .card-header{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-left:4px solid;background:#F8FAFC;}
 .card-header-right{display:flex;align-items:center;gap:6px;}
 .cat-label{font-weight:700;font-size:12px;color:#334155;}
@@ -384,6 +391,7 @@ function render(){
   renderShoppingSection();
   updateActiveSection();
   checkDeadlines();
+  if(window.setupDragListeners) setupDragListeners();
 }
 
 function updateTabBar(){
@@ -533,6 +541,7 @@ function renderPersonSection(idx){
     if(inp){inp.focus();inp.select();inp.onblur=()=>saveName(idx,inp.value);inp.onkeydown=e=>{if(e.key==='Enter')saveName(idx,inp.value);};}
   }
   setupPersonFooterEvents(idx,cats,theme);
+  if(window.setupDragListeners) setupDragListeners();
 }
 
 function renderPersonCat(cat,idx){
@@ -540,8 +549,9 @@ function renderPersonCat(cat,idx){
   const items=(cat.items||[]).filter(i=>i!=null);
   const done=items.filter(i=>i.done).length;
   const color=cat.color||'#6366F1';
-  return `<div class="card">
+  return `<div class="card" draggable="true" data-cat-id="${cat.id}" data-section="person-${idx}">
     <div class="card-header" style="border-left-color:${color}">
+      <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
       <span class="cat-label">${esc_html(cat.label)}</span>
       <span class="cat-badge" style="background:${color}22;color:${color}">${done}/${items.length}</span>
     </div>
@@ -675,6 +685,7 @@ function renderShoppingSection(){
     const clr=document.getElementById('search-clear-sh');
     if(clr) clr.style.display=ui.search?'block':'none';
     setupShoppingFooterEvents(categories);
+    if(window.setupDragListeners) setupDragListeners();
   }
 }
 
@@ -706,8 +717,9 @@ function renderShopCat(cat,p0,p1){
   const done=items.filter(i=>i.done).length;
   const catTotal=items.reduce((s,i)=>s+parsePrice(i.price),0);
   const ui=uiState.shopping;
-  return `<div class="card">
+  return `<div class="card" draggable="true" data-cat-id="${cat.id}" data-section="shopping">
     <div class="card-header" style="border-left-color:${cat.color}">
+      <span class="drag-handle" title="ドラッグで並べ替え">⠿</span>
       <span class="cat-label">${esc_html(cat.label)}</span>
       <div class="card-header-right">
         ${catTotal?`<span class="cat-price">${fmtY(catTotal)}</span>`:''}
@@ -999,6 +1011,172 @@ function confirmShopCat(){
 document.querySelectorAll('.main-tab').forEach(btn=>{
   btn.addEventListener('click',()=>switchTab(btn.dataset.section));
 });
+
+// ── カテゴリ並べ替え（PC: D&D / スマホ: 長押しタッチ）─────────
+(function setupCatDnD(){
+  let dragSrcId=null, dragSection=null, touchTimer=null, ghost=null;
+  let touchSrcId=null, touchSection=null;
+
+  // ────── PC: HTML5 Drag API ──────
+  function onDragStart(e){
+    const card=e.currentTarget;
+    // ハンドル以外からのドラッグは無効
+    const handle=card.querySelector('.drag-handle');
+    if(!handle) return;
+    dragSrcId=card.dataset.catId;
+    dragSection=card.dataset.section;
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain',dragSrcId);
+    // ドラッグ画像を差し替え
+    const label=card.querySelector('.cat-label')?.textContent||'';
+    const g=document.createElement('div');
+    g.style.cssText='position:fixed;top:-999px;left:-999px;background:white;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;color:#334155;box-shadow:0 4px 16px rgba(0,0,0,.15);white-space:nowrap;';
+    g.textContent='⠿ '+label;
+    document.body.appendChild(g);
+    e.dataTransfer.setDragImage(g,0,0);
+    setTimeout(()=>g.remove(),0);
+  }
+  function onDragEnd(e){
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.card.drag-over').forEach(c=>c.classList.remove('drag-over'));
+    dragSrcId=null; dragSection=null;
+  }
+  function onDragOver(e){
+    e.preventDefault();
+    e.dataTransfer.dropEffect='move';
+    const card=e.currentTarget;
+    if(card.dataset.catId!==dragSrcId) card.classList.add('drag-over');
+  }
+  function onDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+  function onDrop(e){
+    e.preventDefault();
+    const card=e.currentTarget;
+    card.classList.remove('drag-over');
+    const destId=card.dataset.catId;
+    const sec=card.dataset.section;
+    if(!dragSrcId||dragSrcId===destId||sec!==dragSection) return;
+    reorderCats(dragSection, dragSrcId, destId);
+  }
+
+  // ────── スマホ: タッチ長押し ──────
+  function createGhost(label){
+    ghost=document.createElement('div');
+    ghost.id='drag-ghost';
+    ghost.textContent='⠿ '+label;
+    document.body.appendChild(ghost);
+  }
+  function moveGhost(x,y){
+    if(!ghost) return;
+    ghost.style.left=(x+12)+'px';
+    ghost.style.top=(y-20)+'px';
+  }
+  function removeGhost(){if(ghost){ghost.remove();ghost=null;}}
+
+  function getCardFromPoint(x,y){
+    // 指の下の要素を取得
+    const els=document.elementsFromPoint(x,y);
+    for(const el of els){
+      const card=el.closest?.('.card[data-cat-id]');
+      if(card) return card;
+    }
+    return null;
+  }
+
+  let lastOverCard=null;
+  function onTouchStart(e){
+    const card=e.currentTarget;
+    const handle=e.target.closest('.drag-handle');
+    if(!handle) return; // ハンドルのみ反応
+    touchTimer=setTimeout(()=>{
+      touchSrcId=card.dataset.catId;
+      touchSection=card.dataset.section;
+      card.classList.add('dragging');
+      const label=card.querySelector('.cat-label')?.textContent||'';
+      createGhost(label);
+      const t=e.touches[0];
+      moveGhost(t.clientX,t.clientY);
+      // スクロール無効化
+      document.body.style.overflow='hidden';
+    },300);
+  }
+  function onTouchMove(e){
+    clearTimeout(touchTimer); touchTimer=null;
+    if(!touchSrcId) return;
+    e.preventDefault();
+    const t=e.touches[0];
+    moveGhost(t.clientX,t.clientY);
+    const over=getCardFromPoint(t.clientX,t.clientY);
+    if(lastOverCard&&lastOverCard!==over) lastOverCard.classList.remove('drag-over');
+    if(over&&over.dataset.catId!==touchSrcId&&over.dataset.section===touchSection){
+      over.classList.add('drag-over'); lastOverCard=over;
+    } else { lastOverCard=null; }
+  }
+  function onTouchEnd(e){
+    clearTimeout(touchTimer); touchTimer=null;
+    document.body.style.overflow='';
+    if(!touchSrcId){removeGhost();return;}
+    const t=e.changedTouches[0];
+    const over=getCardFromPoint(t.clientX,t.clientY);
+    document.querySelectorAll('.card.dragging,.card.drag-over').forEach(c=>c.classList.remove('dragging','drag-over'));
+    removeGhost(); lastOverCard=null;
+    if(over&&over.dataset.catId&&over.dataset.catId!==touchSrcId&&over.dataset.section===touchSection){
+      reorderCats(touchSection, touchSrcId, over.dataset.catId);
+    }
+    touchSrcId=null; touchSection=null;
+  }
+
+  // ────── 並べ替え実行 ──────
+  function reorderCats(section, srcId, destId){
+    if(section==='shopping'){
+      const cats=state.shopping.categories;
+      const si=cats.findIndex(c=>c.id===srcId);
+      const di=cats.findIndex(c=>c.id===destId);
+      if(si<0||di<0) return;
+      const next=[...cats];
+      const [moved]=next.splice(si,1);
+      next.splice(di,0,moved);
+      state.shopping.categories=next;
+      renderShoppingSection();
+    } else {
+      const idx=parseInt(section.slice(-1));
+      const cats=state.persons[idx].categories;
+      const si=cats.findIndex(c=>c.id===srcId);
+      const di=cats.findIndex(c=>c.id===destId);
+      if(si<0||di<0) return;
+      const next=[...cats];
+      const [moved]=next.splice(si,1);
+      next.splice(di,0,moved);
+      state.persons[idx].categories=next;
+      renderPersonSection(idx);
+    }
+    saveData(state);
+  }
+
+  // ────── イベント登録（描画後に毎回呼ぶ）──────
+  window.setupDragListeners=function(){
+    document.querySelectorAll('.card[data-cat-id]').forEach(card=>{
+      // 古いリスナーを除去してから再登録
+      card.removeEventListener('dragstart',onDragStart);
+      card.removeEventListener('dragend',onDragEnd);
+      card.removeEventListener('dragover',onDragOver);
+      card.removeEventListener('dragleave',onDragLeave);
+      card.removeEventListener('drop',onDrop);
+      card.removeEventListener('touchstart',onTouchStart);
+      card.removeEventListener('touchmove',onTouchMove);
+      card.removeEventListener('touchend',onTouchEnd);
+
+      card.addEventListener('dragstart',onDragStart);
+      card.addEventListener('dragend',onDragEnd);
+      card.addEventListener('dragover',onDragOver);
+      card.addEventListener('dragleave',onDragLeave);
+      card.addEventListener('drop',onDrop);
+      card.addEventListener('touchstart',onTouchStart,{passive:false});
+      card.addEventListener('touchmove',onTouchMove,{passive:false});
+      card.addEventListener('touchend',onTouchEnd);
+    });
+  };
+})();
 
 // ── 同期ログ・トースト ───────────────────────────────────────
 function showToast(msg,type=''){
