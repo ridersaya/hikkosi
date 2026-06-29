@@ -509,21 +509,24 @@ function renderPersonSection(idx){
 }
 
 function renderPersonCat(cat,idx){
-  const done=cat.items.filter(i=>i.done).length;
+  if(!cat) return '';
+  const items=(cat.items||[]).filter(i=>i!=null);
+  const done=items.filter(i=>i.done).length;
+  const color=cat.color||'#6366F1';
   return `<div class="card">
-    <div class="card-header" style="border-left-color:${cat.color}">
-      <span class="cat-label">${esc_html(cat.label)}</span>
-      <span class="cat-badge" style="background:${cat.color}22;color:${cat.color}">${done}/${cat.items.length}</span>
+    <div class="card-header" style="border-left-color:${color}">
+      <span class="cat-label">${esc_html(cat.label||'')}</span>
+      <span class="cat-badge" style="background:${color}22;color:${color}">${done}/${items.length}</span>
     </div>
-    ${cat.items.length===0?`<p class="empty-small">アイテムなし</p>`:''}
-    ${cat.items.map(item=>`
+    ${items.length===0?`<p class="empty-small">アイテムなし</p>`:''}
+    ${items.map(item=>`
       <div class="item-row${item.done?' done':''}" id="item-${item.id}">
         <button class="check-btn" onclick="togglePersonItem('person-${idx}','${cat.id}','${item.id}')">
-          <div class="check-box" style="${item.done?`background:${cat.color};border-color:${cat.color}`:'border-color:#CBD5E1'}">
+          <div class="check-box" style="${item.done?`background:${color};border-color:${color}`:'border-color:#CBD5E1'}">
             ${item.done?'✓':''}
           </div>
         </button>
-        <span class="item-text${item.done?' done':''}">${esc_html(item.text)}</span>
+        <span class="item-text${item.done?' done':''}">${esc_html(item.text||'')}</span>
         <button class="del-btn" onclick="deletePersonItem('person-${idx}','${cat.id}','${item.id}')">🗑</button>
       </div>
     `).join('')}
@@ -630,68 +633,84 @@ function renderShoppingSection(){
 }
 
 function renderSettlePanel(allItems,p0,p1){
-  const bought=allItems.filter(i=>i.done);
+  // 購入済み（チェック済み）
+  const bought=allItems.filter(i=>i.done&&i.paidBy&&parsePrice(i.price)>0);
   const pd0=bought.filter(i=>i.paidBy==='0').reduce((s,i)=>s+parsePrice(i.price),0);
   const pd1=bought.filter(i=>i.paidBy==='1').reduce((s,i)=>s+parsePrice(i.price),0);
   const tot=pd0+pd1;
-  const diff=pd0-pd1;
-  const hasPaid=pd0>0||pd1>0;
+  // 未購入（予定）
+  const planned=allItems.filter(i=>!i.done&&i.paidBy&&parsePrice(i.price)>0);
+  const pp0=planned.filter(i=>i.paidBy==='0').reduce((s,i)=>s+parsePrice(i.price),0);
+  const pp1=planned.filter(i=>i.paidBy==='1').reduce((s,i)=>s+parsePrice(i.price),0);
+  const ptot=pp0+pp1;
 
-  if(!hasPaid) return `<div class="settle-panel">
+  const hasAny=tot>0||ptot>0;
+  if(!hasAny) return `<div class="settle-panel">
     <div class="settle-title">💰 支払い清算</div>
-    <p class="settle-empty">購入済みのアイテムに支払者を設定すると<br>清算金額が計算されます</p>
+    <p class="settle-empty">値段と支払者を設定すると<br>清算金額が計算されます</p>
   </div>`;
 
-  const w0=tot?Math.round(pd0/tot*100):0;
-  const w1=tot?Math.round(pd1/tot*100):0;
-  let settleHtml='';
-  if(diff!==0){
-    const fi=diff>0?1:0,ti=diff>0?0:1;
-    const fn=fi===0?p0:p1,tn=ti===0?p0:p1;
-    const fc=PERSON_THEMES[fi].accent,tc=PERSON_THEMES[ti].accent;
-    settleHtml=`<div class="settle-result">
-      <span class="settle-chip" style="background:${fc}">${esc_html(fn)}</span>
-      <span class="settle-arrow">が</span>
-      <span class="settle-chip" style="background:${tc}">${esc_html(tn)}</span>
-      <span class="settle-arrow">に</span>
-      <span class="settle-amt">${fmtY(Math.round(Math.abs(diff)/2))}</span>
-      <span class="settle-arrow">払うと均等に</span>
+  function settleBlock(a0,a1,label){
+    const t=a0+a1;
+    if(t===0) return '';
+    const w0=Math.round(a0/t*100),w1=Math.round(a1/t*100);
+    const diff=a0-a1;
+    let result='';
+    if(diff!==0){
+      const fi=diff>0?1:0,ti=diff>0?0:1;
+      const fn=fi===0?p0:p1,tn=ti===0?p0:p1;
+      const fc=PERSON_THEMES[fi].accent,tc=PERSON_THEMES[ti].accent;
+      result=`<div class="settle-result">
+        <span class="settle-chip" style="background:${fc}">${esc_html(fn)}</span>
+        <span class="settle-arrow">が</span>
+        <span class="settle-chip" style="background:${tc}">${esc_html(tn)}</span>
+        <span class="settle-arrow">に</span>
+        <span class="settle-amt">${fmtY(Math.round(Math.abs(diff)/2))}</span>
+        <span class="settle-arrow">払うと均等に</span>
+      </div>`;
+    } else {
+      result=`<div class="settle-even">✅ ちょうど均等です！</div>`;
+    }
+    return `<div style="margin-bottom:18px">
+      <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px;letter-spacing:.5px">${label}</div>
+      <div class="bar-wrap">
+        ${[{n:p0,pd:a0,w:w0,c:PERSON_THEMES[0].accent},{n:p1,pd:a1,w:w1,c:PERSON_THEMES[1].accent}].map(p=>`
+          <div class="bar-row">
+            <span class="bar-name">${esc_html(p.n)}</span>
+            <div class="bar-track"><div class="bar-fill" style="width:${p.w}%;background:${p.c}"></div></div>
+            <span class="bar-amt" style="color:${p.c}">${fmtY(p.pd)}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="settle-row"><span class="settle-row-label">合計</span><span class="settle-row-val">${fmtY(t)}</span></div>
+      <div class="settle-row dashed"><span class="settle-row-label">1人あたり</span><span class="settle-row-val">${fmtY(Math.round(t/2))}</span></div>
+      ${result}
     </div>`;
-  } else {
-    settleHtml=`<div class="settle-even">✅ ちょうど均等です！</div>`;
   }
 
   return `<div class="settle-panel">
     <div class="settle-title">💰 支払い清算</div>
-    <div class="bar-wrap">
-      ${[{n:p0,pd:pd0,w:w0,c:PERSON_THEMES[0].accent},{n:p1,pd:pd1,w:w1,c:PERSON_THEMES[1].accent}].map(p=>`
-        <div class="bar-row">
-          <span class="bar-name">${esc_html(p.n)}</span>
-          <div class="bar-track"><div class="bar-fill" style="width:${p.w}%;background:${p.c}"></div></div>
-          <span class="bar-amt" style="color:${p.c}">${fmtY(p.pd)}</span>
-        </div>
-      `).join('')}
-    </div>
-    <div class="settle-row"><span class="settle-row-label">合計</span><span class="settle-row-val">${fmtY(tot)}</span></div>
-    <div class="settle-row dashed"><span class="settle-row-label">1人あたり</span><span class="settle-row-val">${fmtY(Math.round(tot/2))}</span></div>
-    ${settleHtml}
+    ${settleBlock(pd0,pd1,'✅ 購入済み')}
+    ${settleBlock(pp0,pp1,'🛒 未購入（予定）')}
   </div>`;
 }
 
 function renderShopCat(cat,p0,p1){
-  const done=cat.items.filter(i=>i.done).length;
-  const catTotal=cat.items.reduce((s,i)=>s+parsePrice(i.price),0);
+  if(!cat) return '';
+  const items=(cat.items||[]).filter(i=>i!=null);
+  const done=items.filter(i=>i.done).length;
+  const catTotal=items.reduce((s,i)=>s+parsePrice(i.price),0);
   const ui=uiState.shopping;
   return `<div class="card">
     <div class="card-header" style="border-left-color:${cat.color}">
       <span class="cat-label">${esc_html(cat.label)}</span>
       <div class="card-header-right">
         ${catTotal?`<span class="cat-price">${fmtY(catTotal)}</span>`:''}
-        <span class="cat-badge" style="background:${cat.color}22;color:${cat.color}">${done}/${cat.items.length}</span>
+        <span class="cat-badge" style="background:${cat.color}22;color:${cat.color}">${done}/${items.length}</span>
       </div>
     </div>
-    ${cat.items.length===0?`<p class="empty-small">アイテムなし</p>`:''}
-    ${cat.items.map(item=>{
+    ${items.length===0?`<p class="empty-small">アイテムなし</p>`:''}
+    ${items.map(item=>{
       const isEd=ui.editingItem&&ui.editingItem.catId===cat.id&&ui.editingItem.itemId===item.id;
       const pbl=item.paidBy==='0'?{label:p0,color:PERSON_THEMES[0].accent}:item.paidBy==='1'?{label:p1,color:PERSON_THEMES[1].accent}:null;
       return `<div>
@@ -1020,7 +1039,7 @@ function normalizeState(data){
     data.persons = toArray(data.persons).map(p=>{
       if(p && p.categories){
         p.categories = toArray(p.categories).map(c=>{
-          if(c && c.items) c.items = toArray(c.items);
+          if(c) c.items = toArray(c.items); // undefinedでも空配列にする
           return c;
         });
       }
@@ -1029,7 +1048,7 @@ function normalizeState(data){
   }
   if(data.shopping && data.shopping.categories){
     data.shopping.categories = toArray(data.shopping.categories).map(c=>{
-      if(c && c.items) c.items = toArray(c.items);
+      if(c) c.items = toArray(c.items); // undefinedでも空配列にする
       return c;
     });
   }
