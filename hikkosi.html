@@ -195,13 +195,13 @@ body{margin:0;font-family:-apple-system,'Helvetica Neue',Arial,'Hiragino Kaku Go
   </div>
 </div>
 
-<script type="module">
+<!-- Firebase SDK (compat/UMD版 - importなしで動く) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
 'use strict';
 
 // ── Firebase 設定 ────────────────────────────────────────────
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-
 const firebaseConfig = {
   apiKey: "AIzaSyApm0pHFtD7AH3-WLFU1MTtj9c3wjjvDO0",
   authDomain: "hikkosi-afe03.firebaseapp.com",
@@ -211,9 +211,9 @@ const firebaseConfig = {
   messagingSenderId: "692447832381",
   appId: "1:692447832381:web:389895bf046903531a3d54"
 };
-const fbApp = initializeApp(firebaseConfig);
-const db = getDatabase(fbApp);
-const DB_REF = ref(db, 'checklist');
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const DB_REF = db.ref('checklist');
 
 // ── デフォルトデータ ─────────────────────────────────────────
 const DEFAULT_CATEGORIES = [
@@ -306,20 +306,13 @@ let _fbSaveTimer = null;
 function saveData(d){
   clearTimeout(_fbSaveTimer);
   _fbSaveTimer = setTimeout(()=>{
-    set(DB_REF, d)
+    DB_REF.set(d)
       .then(()=>showToast('✅ 保存しました', 'ok'))
       .catch(e=>showToast('❌ 保存失敗: '+e.message, 'err'));
   }, 500);
 }
 
-// URLシェア用（Firebase同期とは別に保持）
-function encodeUrl(d){
-  try{return btoa(encodeURIComponent(JSON.stringify(d)));}catch{return null;}
-}
-function getShareUrl(d){
-  const enc=encodeUrl(d);if(!enc)return null;
-  return location.href.split('?')[0].split('#')[0]+'?data='+enc;
-}
+
 
 // ── グローバル状態 ────────────────────────────────────────────
 let state = {
@@ -1004,22 +997,10 @@ document.getElementById('toggle-csv-btn').addEventListener('click',()=>{
   }
 });
 
-// ── グローバル関数をwindowに公開（HTML onclick用）────────────
-// type="module"内の関数はHTMLのonclickから呼べないためwindowに登録
-const GLOBALS = {
-  switchTab,onSearch,setFilter,
-  togglePersonItem,deletePersonItem,startEditName,saveName,
-  startPersonAdd,cancelPersonAdd,confirmPersonAdd,
-  startPersonCat,cancelPersonCat,confirmPersonCat,
-  toggleShopItem,deleteShopItem,toggleShopEdit,closeShopEdit,
-  updateShopPrice,updateShopPaid,updateShopMemo,toggleSettle,
-  startShopAdd,cancelShopAdd,confirmShopAdd,
-  startShopCat,cancelShopCat,confirmShopCat,
-};
-Object.assign(window, GLOBALS);
+// 通常scriptのためグローバル関数はそのままHTMLから呼び出せます
 
 // ── Firebase リアルタイム同期 ─────────────────────────────────
-onValue(DB_REF, (snapshot) => {
+DB_REF.on('value', (snapshot) => {
   const data = snapshot.val();
   if(data){ state = data; }
   if(!_fbReady){
