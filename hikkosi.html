@@ -23,7 +23,6 @@ body{margin:0;font-family:-apple-system,'Helvetica Neue',Arial,'Hiragino Kaku Go
 #total-pct{display:flex;flex-direction:column;align-items:center;min-width:32px;}
 #total-pct-num{font-size:13px;font-weight:800;color:#334155;line-height:1;}
 #total-pct-label{font-size:9px;color:#94A3B8;margin-top:1px;}
-#csv-btn{background:none;border:1.5px solid #E2E8F0;border-radius:20px;padding:5px 10px;font-size:15px;cursor:pointer;color:#64748B;line-height:1;}
 
 /* バナー */
 
@@ -119,21 +118,7 @@ body{margin:0;font-family:-apple-system,'Helvetica Neue',Arial,'Hiragino Kaku Go
 .settle-even{background:#ECFDF5;border-radius:12px;padding:12px 14px;font-size:13px;font-weight:700;color:#059669;text-align:center;margin-top:4px;}
 .settle-toggle-btn{background:rgba(255,255,255,.25);border:1.5px solid rgba(255,255,255,.6);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:white;cursor:pointer;white-space:nowrap;}
 
-/* モーダル */
-#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none;align-items:flex-end;justify-content:center;}
-#modal-overlay.open{display:flex;}
-#modal-box{background:white;border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:640px;box-shadow:0 -4px 30px rgba(0,0,0,.15);max-height:85vh;overflow-y:auto;}
-.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
-.modal-title{font-size:16px;font-weight:800;color:#334155;}
-.modal-close{background:none;border:none;cursor:pointer;font-size:18px;color:#94A3B8;padding:4px;}
-/* CSVモーダル */
-.modal-section{margin-bottom:4px;}
-.modal-sec-title{font-size:13px;font-weight:800;color:#334155;margin-bottom:6px;}
-.modal-desc{font-size:12px;color:#64748B;line-height:1.7;margin:0 0 10px;}
-.modal-btn{width:100%;border:none;border-radius:12px;padding:13px;font-size:14px;font-weight:700;color:white;cursor:pointer;transition:background .2s;}
-.modal-btn-outline{background:white;border:1.5px solid #E2E8F0;border-radius:12px;padding:13px 16px;font-size:13px;font-weight:700;color:#64748B;cursor:pointer;white-space:nowrap;}
-.csv-row{display:flex;gap:8px;margin-bottom:10px;}
-#csv-preview{width:100%;height:160px;border:1.5px solid #E2E8F0;border-radius:8px;padding:10px;font-size:11px;font-family:monospace;color:#334155;background:#F8FAFC;resize:none;line-height:1.6;display:none;}
+
 /* 同期ログ */
 #sync-log{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);width:calc(100% - 28px);max-width:612px;z-index:150;display:flex;flex-direction:column;gap:6px;pointer-events:none;}
 .sync-toast{background:rgba(30,41,59,.88);color:white;font-size:12px;padding:8px 14px;border-radius:20px;display:flex;align-items:center;gap:8px;box-shadow:0 2px 12px rgba(0,0,0,.18);animation:fadeIn .2s ease;backdrop-filter:blur(4px);}
@@ -165,7 +150,6 @@ body{margin:0;font-family:-apple-system,'Helvetica Neue',Arial,'Hiragino Kaku Go
         <span id="total-pct-num">0%</span>
         <span id="total-pct-label">タスク</span>
       </div>
-      <button id="csv-btn" title="CSVをコピー">📊</button>
     </div>
   </div>
   <!-- 同期ログ -->
@@ -177,23 +161,6 @@ body{margin:0;font-family:-apple-system,'Helvetica Neue',Arial,'Hiragino Kaku Go
   <div id="section-shopping" class="section"></div>
 </div>
 
-<!-- CSVモーダル -->
-<div id="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none;align-items:flex-end;justify-content:center;">
-  <div id="modal-box" style="background:white;border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:640px;box-shadow:0 -4px 30px rgba(0,0,0,.15);max-height:80vh;overflow-y:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <span style="font-size:16px;font-weight:800;color:#334155;">📊 CSVエクスポート</span>
-      <button id="modal-close-btn" style="background:none;border:none;cursor:pointer;font-size:18px;color:#94A3B8;">✕</button>
-    </div>
-    <div class="modal-section">
-      <p class="modal-desc">「CSVをコピー」→ Googleスプレッドシートを新規作成 → セルA1を選択して貼り付け（⌘V）→「テキストを列に分割」</p>
-      <div class="csv-row">
-        <button class="modal-btn" id="copy-csv-btn" style="background:#F59E0B;flex:1">📊 CSVテキストをコピー</button>
-        <button class="modal-btn-outline" id="toggle-csv-btn">中身を見る</button>
-      </div>
-      <textarea id="csv-preview" readonly></textarea>
-    </div>
-  </div>
-</div>
 
 <!-- Firebase SDK (compat/UMD版 - importなしで動く) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -341,45 +308,6 @@ const uiState = {
   'shopping': {activeTab:'all',search:'',adding:false,addingCat:false,showSettle:false,editingItem:null,newCat:'sh-kitchen'},
 };
 
-// ── CSV 生成 ───────────────────────────────────────────────
-function buildCsv(){
-  const rows=[];
-  const p0=state.persons[0].name,p1=state.persons[1].name;
-  rows.push([esc('=== 引っ越しタスク ===')].join(','));
-  rows.push([esc('担当者'),esc('カテゴリ'),esc('タスク'),esc('完了')].join(','));
-  for(const person of state.persons){
-    for(const cat of person.categories){
-      for(const item of cat.items){
-        rows.push([esc(person.name),esc(cat.label),esc(item.text),esc(item.done?'✅':'')].join(','));
-      }
-    }
-  }
-  rows.push('');
-  rows.push([esc('=== 買うものリスト ===')].join(','));
-  rows.push([esc('カテゴリ'),esc('品名'),esc('値段'),esc('購入済み'),esc('支払者')].join(','));
-  for(const cat of state.shopping.categories){
-    for(const item of cat.items){
-      const pn=item.paidBy==='0'?p0:item.paidBy==='1'?p1:'';
-      rows.push([esc(cat.label),esc(item.text),esc(parsePrice(item.price)||''),esc(item.done?'✅':''),esc(pn)].join(','));
-    }
-  }
-  rows.push('');
-  rows.push([esc('=== 支払い清算 ===')].join(','));
-  const shopItems=state.shopping.categories.flatMap(c=>c.items).filter(i=>i.done);
-  const pd0=shopItems.filter(i=>i.paidBy==='0').reduce((s,i)=>s+parsePrice(i.price),0);
-  const pd1=shopItems.filter(i=>i.paidBy==='1').reduce((s,i)=>s+parsePrice(i.price),0);
-  const tot=pd0+pd1;
-  rows.push([esc(p0+' の支払合計'),esc(pd0)].join(','));
-  rows.push([esc(p1+' の支払合計'),esc(pd1)].join(','));
-  rows.push([esc('合計'),esc(tot)].join(','));
-  rows.push([esc('1人あたり'),esc(Math.round(tot/2))].join(','));
-  const diff=pd0-pd1;
-  if(diff!==0){
-    const from=diff>0?p1:p0,to=diff>0?p0:p1;
-    rows.push([esc('清算'),esc(from+' → '+to+' に '+fmtY(Math.round(Math.abs(diff)/2)))].join(','));
-  }
-  return '\uFEFF'+rows.join('\n');
-}
 
 // ── レンダリング ──────────────────────────────────────────────
 function render(){
@@ -637,20 +565,20 @@ function renderSettlePanel(allItems,p0,p1){
   const bought=allItems.filter(i=>i.done&&i.paidBy&&parsePrice(i.price)>0);
   const pd0=bought.filter(i=>i.paidBy==='0').reduce((s,i)=>s+parsePrice(i.price),0);
   const pd1=bought.filter(i=>i.paidBy==='1').reduce((s,i)=>s+parsePrice(i.price),0);
-  const tot=pd0+pd1;
   // 未購入（予定）
   const planned=allItems.filter(i=>!i.done&&i.paidBy&&parsePrice(i.price)>0);
   const pp0=planned.filter(i=>i.paidBy==='0').reduce((s,i)=>s+parsePrice(i.price),0);
   const pp1=planned.filter(i=>i.paidBy==='1').reduce((s,i)=>s+parsePrice(i.price),0);
-  const ptot=pp0+pp1;
+  // 合計（将来）
+  const ta0=pd0+pp0, ta1=pd1+pp1;
 
-  const hasAny=tot>0||ptot>0;
+  const hasAny=(pd0+pd1+pp0+pp1)>0;
   if(!hasAny) return `<div class="settle-panel">
     <div class="settle-title">💰 支払い清算</div>
     <p class="settle-empty">値段と支払者を設定すると<br>清算金額が計算されます</p>
   </div>`;
 
-  function settleBlock(a0,a1,label){
+  function settleBlock(a0,a1,label,accent){
     const t=a0+a1;
     if(t===0) return '';
     const w0=Math.round(a0/t*100),w1=Math.round(a1/t*100);
@@ -671,8 +599,8 @@ function renderSettlePanel(allItems,p0,p1){
     } else {
       result=`<div class="settle-even">✅ ちょうど均等です！</div>`;
     }
-    return `<div style="margin-bottom:18px">
-      <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px;letter-spacing:.5px">${label}</div>
+    return `<div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;color:${accent||'#64748B'};margin-bottom:8px;letter-spacing:.5px">${label}</div>
       <div class="bar-wrap">
         ${[{n:p0,pd:a0,w:w0,c:PERSON_THEMES[0].accent},{n:p1,pd:a1,w:w1,c:PERSON_THEMES[1].accent}].map(p=>`
           <div class="bar-row">
@@ -688,10 +616,15 @@ function renderSettlePanel(allItems,p0,p1){
     </div>`;
   }
 
+  // セクション間の区切り線
+  const divider=`<div style="border-top:1.5px dashed #E2E8F0;margin:4px 0 20px"></div>`;
+
   return `<div class="settle-panel">
     <div class="settle-title">💰 支払い清算</div>
-    ${settleBlock(pd0,pd1,'✅ 購入済み')}
-    ${settleBlock(pp0,pp1,'🛒 未購入（予定）')}
+    ${settleBlock(pd0,pd1,'✅ 購入済み','#10B981')}
+    ${(pd0+pd1)>0&&(pp0+pp1)>0?divider:''}
+    ${settleBlock(pp0,pp1,'🛒 未購入（予定）','#F59E0B')}
+    ${(ta0+ta1)>(pd0+pd1)&&(ta0+ta1)>(pp0+pp1)?divider+''+settleBlock(ta0,ta1,'📊 合計（将来の清算）','#6366F1'):''}
   </div>`;
 }
 
@@ -986,42 +919,6 @@ function showToast(msg, type=''){
 }
 
 // ── CSVモーダル ───────────────────────────────────────────────
-document.getElementById('csv-btn').addEventListener('click',()=>{
-  document.getElementById('csv-preview').style.display='none';
-  document.getElementById('toggle-csv-btn').textContent='中身を見る';
-  document.getElementById('copy-csv-btn').textContent='📊 CSVテキストをコピー';
-  document.getElementById('copy-csv-btn').style.background='#F59E0B';
-  document.getElementById('modal-overlay').style.display='flex';
-});
-document.getElementById('modal-close-btn').addEventListener('click',()=>{
-  document.getElementById('modal-overlay').style.display='none';
-});
-document.getElementById('modal-overlay').addEventListener('click',e=>{
-  if(e.target===document.getElementById('modal-overlay'))
-    document.getElementById('modal-overlay').style.display='none';
-});
-document.getElementById('copy-csv-btn').addEventListener('click',()=>{
-  const csv=buildCsv();
-  const btn=document.getElementById('copy-csv-btn');
-  navigator.clipboard.writeText(csv).then(()=>{
-    btn.textContent='✅ コピー完了！';btn.style.background='#10B981';
-    setTimeout(()=>{btn.textContent='📊 CSVテキストをコピー';btn.style.background='#F59E0B';},2500);
-  }).catch(()=>{
-    const ta=document.getElementById('csv-preview');
-    ta.value=csv;ta.style.display='block';ta.select();
-    document.execCommand('copy');
-    btn.textContent='✅ コピー完了！';btn.style.background='#10B981';
-    setTimeout(()=>{btn.textContent='📊 CSVテキストをコピー';btn.style.background='#F59E0B';},2500);
-  });
-});
-document.getElementById('toggle-csv-btn').addEventListener('click',()=>{
-  const ta=document.getElementById('csv-preview');
-  const btn=document.getElementById('toggle-csv-btn');
-  if(ta.style.display==='none'||!ta.style.display){
-    ta.value=buildCsv();ta.style.display='block';btn.textContent='閉じる';
-  } else {
-    ta.style.display='none';btn.textContent='中身を見る';
-  }
 });
 
 // 通常scriptのためグローバル関数はそのままHTMLから呼び出せます
