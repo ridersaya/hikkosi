@@ -886,17 +886,47 @@ function updateBudget(idx,val){
   renderPersonSection(idx);
 }
 
+// ── カテゴリ自動整理（全完了→末尾 / アイテム0→削除）───────────
+function autoSortCats(cats){
+  // 1) アイテムが0件のカテゴリを削除
+  const filtered=cats.filter(c=>(c.items||[]).filter(i=>i!=null).length>0);
+  // 2) 全完了かつ手動移動フラグなし → 末尾へ
+  const active=[], done=[];
+  for(const c of filtered){
+    const items=(c.items||[]).filter(i=>i!=null);
+    const allDone=items.length>0&&items.every(i=>i.done);
+    if(allDone&&!c._manualOrder){
+      // 全完了で未フラグ → 末尾グループへ
+      done.push(c);
+    } else {
+      active.push(c);
+    }
+  }
+  return [...active,...done];
+}
+
 // 個人チェックリスト
 function togglePersonItem(sec,catId,itemId){
   const idx=parseInt(sec.slice(-1));
   const p=state.persons[idx];
-  p.categories=p.categories.map(c=>c.id!==catId?c:{...c,items:c.items.map(i=>i.id!==itemId?i:{...i,done:!i.done})});
+  // チェックを切り替え
+  p.categories=p.categories.map(c=>{
+    if(c.id!==catId) return c;
+    const newItems=c.items.map(i=>i.id!==itemId?i:{...i,done:!i.done});
+    // 未完了に戻したらフラグをリセット
+    const anyUndone=newItems.some(i=>!i.done);
+    return {...c,items:newItems,_manualOrder:anyUndone?false:(c._manualOrder||false)};
+  });
+  // 自動整理
+  p.categories=autoSortCats(p.categories);
   renderPersonSection(idx);updateTabBar();saveData(state);
 }
 function deletePersonItem(sec,catId,itemId){
   const idx=parseInt(sec.slice(-1));
   const p=state.persons[idx];
   p.categories=p.categories.map(c=>c.id!==catId?c:{...c,items:c.items.filter(i=>i.id!==itemId)});
+  // アイテム0件カテゴリを削除
+  p.categories=autoSortCats(p.categories);
   renderPersonSection(idx);updateTabBar();saveData(state);
 }
 function updatePersonMemo(sec,catId,itemId,val){
@@ -958,11 +988,18 @@ function confirmPersonCat(idx){
 
 // 買い物リスト
 function toggleShopItem(catId,itemId){
-  state.shopping.categories=state.shopping.categories.map(c=>c.id!==catId?c:{...c,items:c.items.map(i=>i.id!==itemId?i:{...i,done:!i.done})});
+  state.shopping.categories=state.shopping.categories.map(c=>{
+    if(c.id!==catId) return c;
+    const newItems=c.items.map(i=>i.id!==itemId?i:{...i,done:!i.done});
+    const anyUndone=newItems.some(i=>!i.done);
+    return {...c,items:newItems,_manualOrder:anyUndone?false:(c._manualOrder||false)};
+  });
+  state.shopping.categories=autoSortCats(state.shopping.categories);
   renderShoppingSection();saveData(state);
 }
 function deleteShopItem(catId,itemId){
   state.shopping.categories=state.shopping.categories.map(c=>c.id!==catId?c:{...c,items:c.items.filter(i=>i.id!==itemId)});
+  state.shopping.categories=autoSortCats(state.shopping.categories);
   renderShoppingSection();saveData(state);
 }
 function toggleShopEdit(catId,itemId){
@@ -1135,6 +1172,8 @@ document.querySelectorAll('.main-tab').forEach(btn=>{
       if(si<0||di<0) return;
       const next=[...cats];
       const [moved]=next.splice(si,1);
+      // ユーザーが手動移動 → フラグON
+      moved._manualOrder=true;
       next.splice(di,0,moved);
       state.shopping.categories=next;
       renderShoppingSection();
@@ -1146,6 +1185,8 @@ document.querySelectorAll('.main-tab').forEach(btn=>{
       if(si<0||di<0) return;
       const next=[...cats];
       const [moved]=next.splice(si,1);
+      // ユーザーが手動移動 → フラグON
+      moved._manualOrder=true;
       next.splice(di,0,moved);
       state.persons[idx].categories=next;
       renderPersonSection(idx);
