@@ -303,12 +303,21 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 
 // ── データ管理（Firebase）───────────────────────────────────
 let _fbSaveTimer = null;
+let _isSavingByMe = false; // 自分の保存によるonValue発火を無視するフラグ
 function saveData(d){
+  if(!_fbReady) return; // Firebase接続前は保存しない
   clearTimeout(_fbSaveTimer);
   _fbSaveTimer = setTimeout(()=>{
+    _isSavingByMe = true;
     DB_REF.set(d)
-      .then(()=>showToast('✅ 保存しました', 'ok'))
-      .catch(e=>showToast('❌ 保存失敗: '+e.message, 'err'));
+      .then(()=>{
+        showToast('✅ 保存しました', 'ok');
+        setTimeout(()=>{ _isSavingByMe = false; }, 1000);
+      })
+      .catch(e=>{
+        _isSavingByMe = false;
+        showToast('❌ 保存失敗: '+e.message, 'err');
+      });
   }, 500);
 }
 
@@ -374,7 +383,6 @@ function buildCsv(){
 
 // ── レンダリング ──────────────────────────────────────────────
 function render(){
-  saveData(state);
   updateTabBar();
   renderPersonSection(0);
   renderPersonSection(1);
@@ -383,7 +391,7 @@ function render(){
 }
 
 function updateTabBar(){
-  const items=state.persons.flatMap(p=>p.categories.flatMap(c=>c.items));
+  const items=state.persons.flatMap(p=>(p.categories||[]).flatMap(c=>(c.items||[]).filter(i=>i!=null)));
   const pct=items.length?Math.round(items.filter(i=>i.done).length/items.length*100):0;
   document.getElementById('total-pct-num').textContent=pct+'%';
 
@@ -439,7 +447,7 @@ function renderPersonSection(idx){
   const ui=uiState['person-'+idx];
   const theme=PERSON_THEMES[idx];
   const cats=person.categories;
-  const allItems=cats.flatMap(c=>c.items);
+  const allItems=cats.flatMap(c=>(c.items||[]).filter(i=>i!=null));
   const doneCount=allItems.filter(i=>i.done).length;
   const pct=allItems.length?Math.round(doneCount/allItems.length*100):0;
 
@@ -570,7 +578,7 @@ function renderShoppingSection(){
   const el=document.getElementById('section-shopping');
   const ui=uiState.shopping;
   const {categories}=state.shopping;
-  const allItems=categories.flatMap(c=>c.items);
+  const allItems=categories.flatMap(c=>(c.items||[]).filter(i=>i!=null));
   const bought=allItems.filter(i=>i.done);
   const pct=allItems.length?Math.round(bought.length/allItems.length*100):0;
   const totalEst=allItems.reduce((s,i)=>s+parsePrice(i.price),0);
@@ -1036,16 +1044,27 @@ DB_REF.on('value', (snapshot) => {
     _fbReady = true;
     showToast('☁️ Firebaseと接続しました', 'ok');
     render();
+  } else if(_isSavingByMe){
+    // 自分の保存による発火は無視（タブ遷移などが崩れるのを防ぐ）
+    return;
   } else {
+    // パートナーの更新時はactiveSectionを維持したまま再描画
     showToast('🔄 パートナーが更新しました');
     uiState['person-0'].adding=false; uiState['person-0'].addingCat=false;
     uiState['person-1'].adding=false; uiState['person-1'].addingCat=false;
     uiState['shopping'].adding=false; uiState['shopping'].addingCat=false;
-    render();
+    updateTabBar();
+    renderPersonSection(0);
+    renderPersonSection(1);
+    renderShoppingSection();
+    // activeSectionは変えない（updateActiveSectionを呼ばない）
   }
 }, (error)=>{
   showToast('❌ 接続エラー: '+error.message, 'err');
 });
+
+// Firebaseの応答を待たずに初期描画（デフォルトデータで即表示）
+render();
 </script>
 </body>
 </html>
