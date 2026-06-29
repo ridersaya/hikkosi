@@ -624,7 +624,7 @@ function renderSettlePanel(allItems,p0,p1){
     ${settleBlock(pd0,pd1,'✅ 購入済み','#10B981')}
     ${(pd0+pd1)>0&&(pp0+pp1)>0?divider:''}
     ${settleBlock(pp0,pp1,'🛒 未購入（予定）','#F59E0B')}
-    ${(ta0+ta1)>(pd0+pd1)&&(ta0+ta1)>(pp0+pp1)?divider+''+settleBlock(ta0,ta1,'📊 合計（将来の清算）','#6366F1'):''}
+    ${(pd0+pd1)>0&&(pp0+pp1)>0?divider+settleBlock(ta0,ta1,'📊 合計（将来の清算）','#6366F1'):''}
   </div>`;
 }
 
@@ -917,9 +917,6 @@ function showToast(msg, type=''){
   log.appendChild(t);
   setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 2800);
 }
-
-// ── CSVモーダル ───────────────────────────────────────────────
-});
 
 // 通常scriptのためグローバル関数はそのままHTMLから呼び出せます
 
